@@ -1,0 +1,53 @@
+# Crear material cryptografico
+
+cryptogen generate --config=./crypto-config.yaml
+
+# Creación de bloque genesis y transacciones de configuraciones
+
+
+configtxgen -profile FasilOrdererGenesis -channelID system-channel -outputBlock ./channel-artifacts/genesis.block
+
+# Creación del canal
+
+configtxgen -profile FasilChannel -outputCreateChannelTx ./channel-artifacts/channel.tx -channelID fasil-channel
+
+# Creación de anchor peers
+
+configtxgen -profile FasilChannel -outputAnchorPeersUpdate ./channel-artifacts/FasilOrgMSPanchors.tx -channelID fasil-channel -asOrg FasilOrg
+
+# Variables de entorno
+
+export CHANNEL_NAME=fasil-channel
+export VERBOSE=false
+export FABRIC_CFG_PATH=$PWD
+
+
+docker volume create portainer_data
+docker run -d -p 8000:8000 -p 9000:9000 -v /var/run/docker.sock:/var/run/docker.sock -v portainer_data:/data portainer/portainer
+
+# Crear canal
+
+peer channel create -o orderer.esfasil.com:7050 -c $CHANNEL_NAME -f ./channel-artifacts/channel.tx --tls true --cafile /opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/ordererOrganizations/esfasil.com/msp/tlscacerts/tlsca.esfasil.com-cert.pem 
+
+# Couch DB
+
+http://localhost:5984/_utils/#login
+
+# Unirse al canal
+peer channel join -b fasil-channel.block
+
+#Configurar anchor peer para el channel
+peer channel update -o orderer.esfasil.com:7050 -c $CHANNEL_NAME -f ./channel-artifacts/FasilOrgMSPanchors.tx --tls true --cafile /opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/ordererOrganizations/esfasil.com/msp/tlscacerts/tlsca.esfasil.com-cert.pem
+
+
+#Variables utiles para instalación de contratos inteligentes
+
+export CHANNEL_NAME=fasil-channel
+export CHAINCODE_NAME=foodcontrol
+export CHAINCODE_VERSION=1
+export CC_RUNTIME_LANGUAGE=golang
+export CC_SRC_PATH="../../../chaincode/$CHAINCODE_NAME/"
+export ORDERER_CA=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/ordererOrganizations/esfasil.com/msp/tlscacerts/tlsca.esfasil.com-cert.pem
+
+#Empaqueta chaincode
+peer lifecycle chaincode package ${CHAINCODE_NAME}.tar.gz --path ${CC_SRC_PATH} --lang ${CC_RUNTIME_LANGUAGE} --label ${CHAINCODE_NAME}_${CHAINCODE_VERSION} >&log.txt
